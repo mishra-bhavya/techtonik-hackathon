@@ -6,6 +6,7 @@ from model import (
     train_model,
     detect_concern,
     has_made_progress,
+    summarize_changes,
     generate_insight
 )
 
@@ -26,10 +27,11 @@ selected_patient = st.sidebar.selectbox("Patient ID", patient_ids, key="patient_
 patient_df = df[df["patient_id"] == selected_patient].reset_index(drop=True)
 
 # AI Analysis
-model = train_model(patient_df[["sleep_hours", "activity_level", "mood_score", "therapy_attended"]])
+model = train_model(patient_df[["sleep_hours", "activity_level", "mood_score", "therapy_attended", "heart_rate", "stress_level"]])
 risk_score = detect_concern(model, patient_df)
 progress = has_made_progress(patient_df)
-insight = generate_insight(risk_score, progress)
+summary = summarize_changes(patient_df)
+insight = generate_insight(risk_score, progress, summary)
 
 # Main Dashboard Layout
 st.markdown("---")
@@ -82,54 +84,95 @@ st.markdown("---")
 # Behavioral Trends Section
 st.subheader("📈 Behavioral Trends Over Time")
 
+# Date range selector
+col_filter1, col_filter2 = st.columns([3, 1])
+with col_filter1:
+    days_to_show = st.slider("Days to Display", min_value=7, max_value=len(patient_df), value=min(30, len(patient_df)), step=1)
+with col_filter2:
+    st.metric("Total Days", len(patient_df))
+
+# Filter data based on selection
+filtered_df = patient_df.tail(days_to_show).reset_index(drop=True)
+
 # Create tabs for different visualizations
-trend_tab1, trend_tab2, trend_tab3 = st.tabs(["📊 Combined View", "📉 Individual Metrics", "📅 Daily Summary"])
+trend_tab1, trend_tab2, trend_tab3, trend_tab4 = st.tabs(["📊 Key Metrics", "💓 Health Indicators", "🎯 Therapy & Progress", "📅 Statistics"])
 
 with trend_tab1:
-    st.markdown("##### All Behavioral Metrics")
-    chart_data = patient_df[["sleep_hours", "activity_level", "mood_score"]].copy()
-    chart_data.columns = ["Sleep Hours", "Activity Level", "Mood Score"]
-    st.line_chart(chart_data, use_container_width=True)
+    st.markdown("##### Sleep, Mood & Activity Patterns")
+    
+    # Normalize activity level for better visualization (scale to 0-10 range)
+    viz_data = filtered_df[["sleep_hours", "mood_score"]].copy()
+    viz_data["activity_level_scaled"] = (filtered_df["activity_level"] / filtered_df["activity_level"].max()) * 10
+    viz_data.columns = ["Sleep Hours", "Mood Score", "Activity (Scaled)"]
+    
+    st.line_chart(viz_data, use_container_width=True, height=400)
+    st.caption("📌 Activity Level is scaled 0-10 for visualization clarity")
 
 with trend_tab2:
-    # Individual metric charts
-    metric_col1, metric_col2 = st.columns(2)
+    st.markdown("##### Heart Rate & Stress Monitoring")
     
-    with metric_col1:
-        st.markdown("##### 😴 Sleep Hours")
-        st.line_chart(patient_df["sleep_hours"], use_container_width=True, color="#1f77b4")
-        
-        st.markdown("##### 😊 Mood Score")
-        st.line_chart(patient_df["mood_score"], use_container_width=True, color="#2ca02c")
+    health_col1, health_col2 = st.columns(2)
     
-    with metric_col2:
-        st.markdown("##### 🏃 Activity Level")
-        st.line_chart(patient_df["activity_level"], use_container_width=True, color="#ff7f0e")
-        
-        st.markdown("##### 🎭 Therapy Attendance")
-        st.bar_chart(patient_df["therapy_attended"], use_container_width=True, color="#d62728")
+    with health_col1:
+        st.markdown("**💓 Heart Rate (BPM)**")
+        st.line_chart(filtered_df["heart_rate"], use_container_width=True, color="#e74c3c", height=300)
+        avg_hr = filtered_df["heart_rate"].mean()
+        st.caption(f"Average: {avg_hr:.1f} BPM")
+    
+    with health_col2:
+        st.markdown("**😰 Stress Level**")
+        st.line_chart(filtered_df["stress_level"], use_container_width=True, color="#9b59b6", height=300)
+        avg_stress = filtered_df["stress_level"].mean()
+        st.caption(f"Average: {avg_stress:.1f}/10")
 
 with trend_tab3:
-    st.markdown("##### Daily Summary Statistics")
+    st.markdown("##### Therapy Attendance & Engagement")
+    
+    therapy_col1, therapy_col2 = st.columns(2)
+    
+    with therapy_col1:
+        st.markdown("**🎭 Therapy Sessions**")
+        st.bar_chart(filtered_df["therapy_attended"], use_container_width=True, color="#3498db", height=300)
+        attended = filtered_df["therapy_attended"].sum()
+        st.caption(f"Attended: {attended}/{len(filtered_df)} sessions")
+    
+    with therapy_col2:
+        st.markdown("**📊 Activity Levels (Steps)**")
+        st.area_chart(filtered_df["activity_level"], use_container_width=True, color="#f39c12", height=300)
+        avg_activity = filtered_df["activity_level"].mean()
+        st.caption(f"Average: {avg_activity:.0f} steps/day")
+
+with trend_tab4:
+    st.markdown("##### Summary Statistics (Last {days_to_show} Days)".replace("{days_to_show}", str(days_to_show)))
     
     # Create summary statistics
     summary_cols = st.columns(4)
     
     with summary_cols[0]:
-        avg_sleep = patient_df["sleep_hours"].mean()
-        st.metric("Avg Sleep", f"{avg_sleep:.1f}h")
+        avg_sleep = filtered_df["sleep_hours"].mean()
+        min_sleep = filtered_df["sleep_hours"].min()
+        max_sleep = filtered_df["sleep_hours"].max()
+        st.metric("😴 Avg Sleep", f"{avg_sleep:.1f}h")
+        st.caption(f"Range: {min_sleep:.1f}h - {max_sleep:.1f}h")
     
     with summary_cols[1]:
-        avg_activity = patient_df["activity_level"].mean()
-        st.metric("Avg Activity", f"{avg_activity:.0f}")
+        avg_mood = filtered_df["mood_score"].mean()
+        min_mood = filtered_df["mood_score"].min()
+        max_mood = filtered_df["mood_score"].max()
+        st.metric("😊 Avg Mood", f"{avg_mood:.1f}/5")
+        st.caption(f"Range: {min_mood:.1f} - {max_mood:.1f}")
     
     with summary_cols[2]:
-        avg_mood = patient_df["mood_score"].mean()
-        st.metric("Avg Mood", f"{avg_mood:.1f}/5")
+        avg_hr = filtered_df["heart_rate"].mean()
+        min_hr = filtered_df["heart_rate"].min()
+        max_hr = filtered_df["heart_rate"].max()
+        st.metric("💓 Avg Heart Rate", f"{avg_hr:.0f}")
+        st.caption(f"Range: {min_hr} - {max_hr} BPM")
     
     with summary_cols[3]:
-        therapy_rate = (patient_df["therapy_attended"].sum() / len(patient_df)) * 100
-        st.metric("Therapy Rate", f"{therapy_rate:.0f}%")
+        therapy_rate = (filtered_df["therapy_attended"].sum() / len(filtered_df)) * 100
+        st.metric("🎭 Attendance", f"{therapy_rate:.0f}%")
+        st.caption(f"{filtered_df['therapy_attended'].sum()}/{len(filtered_df)} sessions")
 
 st.markdown("---")
 
@@ -139,7 +182,7 @@ with st.expander("📄 View Complete Patient Records"):
     
     # Display dataframe with better formatting
     display_df = patient_df.copy()
-    display_df.columns = ["Patient ID", "Sleep Hours", "Activity Level", "Mood Score", "Therapy Attended"]
+    display_df.columns = ["Patient ID", "Date", "Sleep Hours", "Activity Level", "Mood Score", "Therapy Attended", "Heart Rate", "Stress Level"]
     
     st.dataframe(
         display_df,

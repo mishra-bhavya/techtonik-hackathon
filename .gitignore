@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python
 __pycache__/
 *.py[cod]
@@ -28,3 +29,7 @@ Thumbs.db
 
 # Environment variables
 .env
+=======
+__pycache__/
+*.pyc
+>>>>>>> 9b8a144b288b35028eb48869dbf458b7c6b67c9e
