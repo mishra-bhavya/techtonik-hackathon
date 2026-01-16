@@ -23,17 +23,25 @@ def train_model(df):
 
 # Detect concerning behavior
 def detect_concern(model, df):
-    scores = model.decision_function(df)
+    features = df[[
+        "sleep_hours",
+        "activity_level",
+        "mood_score",
+        "therapy_attended"
+    ]]
+
+    scores = model.decision_function(features)
     risk_score = np.mean(scores)
 
     # Rule-based red flags
-    low_sleep = df["sleep_hours"].iloc[-3:].mean() < 4
-    low_mood = df["mood_score"].iloc[-3:].mean() < 2
+    low_sleep = features["sleep_hours"].iloc[-3:].mean() < 4
+    low_mood = features["mood_score"].iloc[-3:].mean() < 2
 
     if low_sleep or low_mood:
-        risk_score -= 0.5  # force concern signal
+        risk_score -= 0.5
 
     return risk_score
+
 
 
 # Check progress
